@@ -24,7 +24,8 @@ public class Model {
 	Integer [] T_v = new Integer[V.length];				// [v], maksymalna szybkosc z jaka moze wysylac dane wezel, T_v >= 0
 	Integer [] R_v = new Integer[V.length];				// [v], maksymalna szybkosc z jaka moze odbierac dane wezel, R_v >= 0
 	Double [] pc_v = new Double[V.length];			// [v], wsp. zuzycia energii wezla v
-	///TODO zdefiniowac r
+	Double r;
+	Double R = 0.0;
 	
 	
 	public Model() {
@@ -78,9 +79,8 @@ public class Model {
 			for (Integer v : V) {
 				IloLinearIntExpr lhs = cplex.linearIntExpr();
 				for (Integer d : D) {
-					for (Path p : P) {
+					for (Path p : P) { 
 						Integer temp = delta_vdp[v-1][d-1][p.getNr()-1] * t_vd[v-1][d-1];
-						//System.out.println("v: "+v+", d: "+d+", p: "+p.getNr()+", temp: "+temp);
 						if (temp != 0) {
 							if (x_dp[d-1][p.getNr()-1] != null) {
 								lhs.addTerm(temp, x_dp[d - 1][p.getNr() - 1]);
@@ -88,7 +88,7 @@ public class Model {
 						}
 					}
 				}
-				cplex.addLe(lhs, T_v[v-1]);
+				cplex.addLe(lhs, T_v[v-1]*r);
 			}
 			
 			/// Ograniczenie na maksymalną szybkość odbierania danych przez węzeł  
@@ -120,7 +120,7 @@ public class Model {
 						}
 					}
 				}
-				Double d = ((double)T_v[v-1] + (double)R_v[v-1]) * pc_v[v-1];
+				Double d = ((double)T_v[v-1]*r + (double)R_v[v-1]) * pc_v[v-1];
 				Integer rhs = d.intValue();
 				cplex.addLe(lhs, rhs);
 			}
@@ -169,6 +169,8 @@ public class Model {
 	}
 	
 	private void startData() {
+		r = 1.0 - R;
+		
 		for (int i = 0; i < v_len; i++) {
 			V[i] = i+1;
 		}
