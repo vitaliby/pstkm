@@ -28,41 +28,38 @@ public class Model {
 	
 	
 	public Model() {
+		startData();
+		fill_delta_s_t();	
 		model();
 	}
 	
 	public void model() {
+		Double result = null;
 		try {
 			IloCplex cplex = new IloCplex();
-			
-
-			startData();
-			fill_delta_s_t();
-			
 			
 			// Zmienne
 			/// Definicja zmiennej x_dp, ruch zapotrzebowania d na sciezce p, x_dp >= 0
 			IloIntVar [][] x_dp = new IloIntVar[D.length][P.length];
-			for (Integer d : D) {
-				for (Path p : P) {
-					x_dp[d-1][p.getNr()-1] = cplex.intVar(0, Integer.MAX_VALUE, "x_"+d+"-"+p.getNr());
-				}
+			for (Path p : P) {
+				x_dp[p.getD()-1][p.getNr()-1] = cplex.intVar(0, Integer.MAX_VALUE, "x_"+p.getD()+"-"+p.getNr());
 			}
 			
 			/// Definicja zmiennej h_d, volumen zapotrzebowania d, h_d >= 0
 			IloIntVar h_d = cplex.intVar(0, Integer.MAX_VALUE, "h_d");
-			//Integer h_d = 10;
 
 			
 			// Cel
-			cplex.addMaximize(h_d);
-			/*IloLinearIntExpr obj = cplex.linearIntExpr();
+			//cplex.addMaximize(h_d);
+			IloLinearIntExpr obj = cplex.linearIntExpr();
 			for (Integer d : D) {				
 				for (Path p : P) {
-					obj.addTerm(1, x_dp[d-1][p.getNr()-1]);
+					if (x_dp[d-1][p.getNr()-1] != null) {
+						obj.addTerm(1, x_dp[d - 1][p.getNr() - 1]);
+					}
 				}
 			}
-			cplex.addMaximize(obj);*/
+			cplex.addMaximize(h_d);
 			
 			
 			// Ograniczenia
@@ -70,27 +67,12 @@ public class Model {
 			for (Integer d : D) {
 				IloLinearIntExpr lhs = cplex.linearIntExpr();
 				for (Path p : P) {
-					lhs.addTerm(1, x_dp[d-1][p.getNr()-1]);
+					if (x_dp[d-1][p.getNr()-1] != null) {
+						lhs.addTerm(1, x_dp[d - 1][p.getNr() - 1]);
+					}
 				}
 				cplex.addEq(lhs, h_d);
 			}
-			
-			////////
-			/*System.out.println("D length: "+D.length);
-			for (Integer d : D) {
-				System.out.println(d);
-				if (d != D.length) {
-					IloLinearIntExpr lhs = cplex.linearIntExpr();
-					IloLinearIntExpr rhs = cplex.linearIntExpr();
-					for (Path p : P) {
-						if (p.getNr() != P.length) {
-							lhs.addTerm(1, x_dp[d - 1][p.getNr() - 1]);
-							rhs.addTerm(1, x_dp[d][p.getNr()]);
-						}
-					}
-					cplex.addEq(lhs, rhs);
-				}
-			}*/
 			
 			/// Ograniczenie na maksymalną szybkość wysyłania danych przez węzeł 
 			for (Integer v : V) {
@@ -100,7 +82,9 @@ public class Model {
 						Integer temp = delta_vdp[v-1][d-1][p.getNr()-1] * t_vd[v-1][d-1];
 						//System.out.println("v: "+v+", d: "+d+", p: "+p.getNr()+", temp: "+temp);
 						if (temp != 0) {
-							lhs.addTerm(temp, x_dp[d-1][p.getNr()-1]);
+							if (x_dp[d-1][p.getNr()-1] != null) {
+								lhs.addTerm(temp, x_dp[d - 1][p.getNr() - 1]);
+							}
 						}
 					}
 				}
@@ -114,7 +98,9 @@ public class Model {
 					for (Path p : P) {
 						Integer temp = delta_vdp[v-1][d-1][p.getNr()-1] * s_vd[v-1][d-1];
 						if (temp != 0) {
-							lhs.addTerm(temp, x_dp[d-1][p.getNr()-1]);
+							if (x_dp[d-1][p.getNr()-1] != null) {
+								lhs.addTerm(temp, x_dp[d - 1][p.getNr() - 1]);
+							}
 						}
 					}
 				}
@@ -128,7 +114,9 @@ public class Model {
 					for (Path p : P) {
 						Integer temp = delta_vdp[v-1][d-1][p.getNr()-1] * (s_vd[v-1][d-1] + t_vd[v-1][d-1]);
 						if (temp != 0) {
-							lhs.addTerm(temp, x_dp[d-1][p.getNr()-1]);
+							if (x_dp[d-1][p.getNr()-1] != null) {
+								lhs.addTerm(temp, x_dp[d - 1][p.getNr() - 1]);
+							}
 						}
 					}
 				}
@@ -139,12 +127,12 @@ public class Model {
 			
 			if (cplex.solve()) {
 				System.out.println("obj = "+cplex.getObjValue());
+				result = cplex.getObjValue();
 			}
 			else {
 				System.out.println("Model not solved");
+				result = null;
 			}
-			
-		
 			
 		} 
 		catch (IloException exc) {
@@ -164,26 +152,16 @@ public class Model {
 					}
 				}
 				for (Path p : P) {
-					//System.out.println("d sciezki: "+p.getD()+", d petli: "+d+", v sciezki start: "+p.getStartV()+", v petli: "+v);
 					if (p.getD() == d && p.getStartV() == v) {
 						s_vd[v-1][d-1] = 0;
 					} 
-					//else {
-					//	s_vd[v-1][d-1] = 1;
-					//}
 					if (p.getD() == d && p.getEndV() == v) {
 						t_vd[v-1][d-1] = 0;
 					} 
-					//else {
-					//	t_vd[v-1][d-1] = 1;
-					//}
 					for (Integer v_p : p.getAllV()) {
 						if (v_p == v && p.getD() == d) {
 							delta_vdp[v-1][d-1][p.getNr()-1] = 1;
 						}
-						//else {
-						//	delta_vdp[v-1][d-1][p.getNr()-1] = 0;
-						//}
 					}
 				}
 			}
